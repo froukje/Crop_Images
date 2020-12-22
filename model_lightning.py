@@ -84,6 +84,8 @@ class CropClassifierLightning(pl.LightningModule):
         self.fc1 = nn.Linear(self._to_linear, 128)
         self.fc2 = nn.Linear(128, 5) # 5 classes
 
+        self.lr = 0.001
+
     def convs(self, x):
         x = F.max_pool2d(F.relu(self.conv1(x)), (2,2))
         x = F.max_pool2d(F.relu(self.conv2(x)), (2,2))
@@ -117,10 +119,9 @@ class CropClassifierLightning(pl.LightningModule):
         logits = self.forward(x)
         loss = self.cross_entropy_loss(logits, y)
         self.log('valid_loss', loss)
-        return loss
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr= 0.001)
+        optimizer = torch.optim.Adam(self.parameters(), self.lr)
         return optimizer
 
 
@@ -132,7 +133,6 @@ if __name__ == '__main__':
 
     img_size = 224
     batch_size = 32
-
     classes = {'jute': 0, 'maize': 1, 'rice': 2, 'sugarane': 3, 'wheat': 4}
 
     data_module = CropDataModule()
