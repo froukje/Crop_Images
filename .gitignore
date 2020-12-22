@@ -1,0 +1,4 @@
+data/*
+lightning_logs/*
+*.pt
+*.ipynb_checkpoints
