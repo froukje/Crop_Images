@@ -6,3 +6,5 @@
 * The following blog posts have been used:
   * https://towardsdatascience.com/from-pytorch-to-pytorch-lightning-a-gentle-introduction-b371b7caaf09
   * https://towardsdatascience.com/pytorch-lightning-machine-learning-zero-to-hero-in-75-lines-of-code-7892f3ba83c0
+ 
+* Use nni (https://nni.readthedocs.io/) for hyperparamter tuning
