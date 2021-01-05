@@ -8,6 +8,9 @@ import torch.nn.functional as F
 from torchvision import datasets, transforms
 from torch.utils.data import Dataset, DataLoader
 import pytorch_lightning as pl
+from pytorch_lightning.loggers import TensorBoardLogger
+from pytorch_lightning.callbacks.early_stopping import EarlyStopping
+import nni
 
 from dataset_model import CropDataset
 
@@ -65,24 +68,24 @@ class CropDataModule(pl.LightningDataModule):
         self.valid_dataset = CropDataset(X_valid, y_valid, transform=transforms_valid)
 
     def train_dataloader(self):
-        return DataLoader(self.train_dataset, batch_size=batch_size)
+        return DataLoader(self.train_dataset, batch_size=batch_size, num_workers=8)
 
     def val_dataloader(self):
-        return DataLoader(self.valid_dataset, batch_size=batch_size)
+        return DataLoader(self.valid_dataset, batch_size=batch_size, num_workers=8)
 
 class CropClassifierLightning(pl.LightningModule):
-    def __init__(self, img_size):
+    def __init__(self, img_size, hidden_size, conv_size1, conv_size2, conv_size3):
         super().__init__()
-        self.conv1 = nn.Conv2d(3, 32, 3) # input channel, output, kernel size
-        self.conv2 = nn.Conv2d(32, 64, 3)
-        self.conv3 = nn.Conv2d(64, 128, 3)
+        self.conv1 = nn.Conv2d(3, conv_size1, 3) # input channel, output, kernel size
+        self.conv2 = nn.Conv2d(conv_size1, conv_size2, 3)
+        self.conv3 = nn.Conv2d(conv_size2, conv_size3, 3)
 
         # find size of following fc layer
         x = torch.randn(3, img_size, img_size).view(-1, 3, img_size, img_size) # first dim is batch size
         self._to_linear = None
         self.convs(x)
-        self.fc1 = nn.Linear(self._to_linear, 128)
-        self.fc2 = nn.Linear(128, 5) # 5 classes
+        self.fc1 = nn.Linear(self._to_linear, hidden_size)
+        self.fc2 = nn.Linear(hidden_size, 5) # 5 classes
 
         self.lr = 0.001
 
@@ -117,8 +120,9 @@ class CropClassifierLightning(pl.LightningModule):
     def validation_step(self, valid_batch, batch_idx):
         x, y = valid_batch  
         logits = self.forward(x)
-        loss = self.cross_entropy_loss(logits, y)
-        self.log('valid_loss', loss)
+        valid_loss = self.cross_entropy_loss(logits, y)
+        self.log('valid_loss', valid_loss)
+        nni.report_intermediate_result(float(valid_loss))
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), self.lr)
@@ -137,12 +141,22 @@ if __name__ == '__main__':
 
     data_module = CropDataModule()
 
+    logger = TensorBoardLogger('tb_logs', name='my_first_test')
+
+    hparams = nni.get_next_parameter()
+    hidden_size=hparams['hidden_size']
+    conv_size1, conv_size2, conv_size3 = hparams['conv_size1'], hparams['conv_size2'], hparams['conv_size3']
     # train
-    model = CropClassifierLightning(img_size)
-    trainer = pl.Trainer(max_epochs=100, log_every_n_steps=5)
+    model = CropClassifierLightning(img_size=img_size, hidden_size=hidden_size,
+                                    conv_size1=conv_size1, conv_size2=conv_size2, conv_size3=conv_size3)
+
+    early_stop_callback = EarlyStopping(monitor='valid_loss',
+                                        min_delta=0.00,
+                                        patience=5,
+                                        verbose=False,
+                                        mode='max')
+    trainer = pl.Trainer(callbacks=[early_stop_callback], max_epochs=100, logger=logger)
 
     trainer.fit(model, data_module)
-
-    #print(f'validation loss: {model.validation_step()}')
-
+    
     torch.save(model.state_dict(), 'model_crop_lightning.pt')

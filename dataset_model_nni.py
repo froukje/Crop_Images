@@ -23,11 +23,11 @@ class CropDataset(Dataset):
         return len(self.data)
 
 class CropClassifier(nn.Module):
-    def __init__(self, img_size, hidden_size):
+    def __init__(self, img_size, hidden_size, conv_size1, conv_size2, conv_size3):
         super().__init__()
-        self.conv1 = nn.Conv2d(3, 32, 3) # input channels, output, kernel size
-        self.conv2 = nn.Conv2d(32, 64, 3)
-        self.conv3 = nn.Conv2d(64, 128, 3)
+        self.conv1 = nn.Conv2d(3, conv_size1, 3) # input channels, output, kernel size
+        self.conv2 = nn.Conv2d(conv_size1, conv_size2, 3)
+        self.conv3 = nn.Conv2d(conv_size2, conv_size3, 3)
 
         # find out the size of the following fc layer
         x = torch.randn(3, img_size, img_size).view(-1, 3, img_size, img_size)

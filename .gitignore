@@ -1,4 +1,5 @@
 data/*
 lightning_logs/*
+tb_logs/*
 *.pt
 *.ipynb_checkpoints

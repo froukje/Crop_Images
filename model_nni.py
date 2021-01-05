@@ -9,7 +9,7 @@ import torch.functional as F
 from torch.utils.data import DataLoader, Dataset
 import nni
 
-from dataset_model import CropDataset, CropClassifier
+from dataset_model_nni import CropDataset, CropClassifier
 
 
 def main(params):
@@ -81,7 +81,10 @@ def main(params):
         print(f'Batch Nr {batch}, data shape {data.shape}, target.shape {target.shape})')
 
     print('\n')
-    model = CropClassifier(img_size)
+    hidden_size = params['hidden_size'] 
+    conv_size1, conv_size2, conv_size3 = params['conv_size1'], params['conv_size2'], params['conv_size3']
+    model = CropClassifier(hidden_size=hidden_size, conv_size1=conv_size1, conv_size2=conv_size2, 
+                            conv_size3=conv_size3,img_size=img_size)
 
     optimizer = optim.Adam(model.parameters(), lr=0.001)
     criterion = nn.CrossEntropyLoss()
@@ -140,7 +143,7 @@ def main(params):
 
         if epoch % 10 == 0:
             print(f'epoch {epoch}/{epochs} - train loss: {train_loss} - valid loss: {valid_loss}')
-            nni.report_intermediate_result(valid_loss) 
+            nni.report_intermediate_result(float(valid_loss)) 
 
         # save model if loss is decreasing
         if valid_loss < valid_loss_min:
