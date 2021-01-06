@@ -10,4 +10,6 @@
 * model.py uses pyTorch
 * model_lightning.py uses pyTorch lightning
 * model_nni.py is analogue to model.py, but uses nni for hyperparameter tuning with search_space.json and config.yml
+* model_lightning_nni.py is analogue to model_lightning.py (with some changes) and uses nni for hyperparameter tuning. search_space.json is used as above and config_lightning.yml.
+* model_lightning_raytune.py uses Ray Tune for hyperparamter tuning.
 
