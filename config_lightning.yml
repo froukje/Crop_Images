@@ -5,7 +5,7 @@ maxExecDuration: 1h
 maxTrialNum: 10
 trainingServicePlatform: local
 # The path to Search Space
-searchSpacePath: search_space.json
+searchSpacePath: search_space_lightning.json
 useAnnotation: false
 tuner:
   builtinTunerName: TPE

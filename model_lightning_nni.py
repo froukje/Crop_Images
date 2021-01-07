@@ -10,6 +10,7 @@ from torch.utils.data import Dataset, DataLoader
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
+from pytorch_lightning.callbacks import Callback
 import nni
 
 from dataset_model import CropDataset
@@ -76,6 +77,10 @@ class CropDataModule(pl.LightningDataModule):
 class CropClassifierLightning(pl.LightningModule):
     def __init__(self, img_size, hidden_size, conv_size1, conv_size2, conv_size3):
         super().__init__()
+
+        self.valid_losses = []
+        self.valid_losses_epoch = []
+
         self.conv1 = nn.Conv2d(3, conv_size1, 3) # input channel, output, kernel size
         self.conv2 = nn.Conv2d(conv_size1, conv_size2, 3)
         self.conv3 = nn.Conv2d(conv_size2, conv_size3, 3)
@@ -122,12 +127,37 @@ class CropClassifierLightning(pl.LightningModule):
         logits = self.forward(x)
         valid_loss = self.cross_entropy_loss(logits, y)
         self.log('valid_loss', valid_loss)
-        nni.report_intermediate_result(float(valid_loss))
+        self.valid_losses.append(valid_loss.item())
+        return {'val_loss': valid_loss}
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), self.lr)
         return optimizer
 
+    def validation_epoch_end(self, logits):
+        valid_loss_epoch = torch.stack([x['val_loss'] for x in logits]).mean()
+        self.log('valid_loss_epoch', valid_loss_epoch)
+
+
+class CustomCallback(Callback):
+
+    def on_epoch_end(self, trainer, pl_module):
+        metrics = trainer.callback_metrics
+        epoch = trainer.current_epoch
+        print(f"Epoch {epoch}: {metrics}")
+
+    def on_validation_epoch_end(self, trainer, pl_module):
+        print(f"Val_epoch_end: {trainer.callback_metrics}")
+        nni.report_intermediate_result(float(trainer.callback_metrics['valid_loss_epoch']))
+
+    #def on_train_epoch_end(self, trainer, pl_module):
+    #    print(f"Train_epoch_end: {trainer.callback_metrics}")
+    #    print("\n")
+
+    def on_validation_end(self, trainer, pl_module):
+        print(f'Final_val_loss: {trainer.callback_metrics}')
+        print('\n')
+        nni.report_final_result(float(trainer.callback_metrics['valid_loss_epoch']))
 
 if __name__ == '__main__':
 
@@ -143,20 +173,24 @@ if __name__ == '__main__':
 
     logger = TensorBoardLogger('tb_logs', name='my_first_test')
 
+    # get hyperparameters from search space
     hparams = nni.get_next_parameter()
     hidden_size=hparams['hidden_size']
     conv_size1, conv_size2, conv_size3 = hparams['conv_size1'], hparams['conv_size2'], hparams['conv_size3']
+    batch_size = hparams['batch_size']
+    lr = hparams['lr']
+
     # train
     model = CropClassifierLightning(img_size=img_size, hidden_size=hidden_size,
                                     conv_size1=conv_size1, conv_size2=conv_size2, conv_size3=conv_size3)
 
-    early_stop_callback = EarlyStopping(monitor='valid_loss',
+    early_stop_callback = EarlyStopping(monitor='valid_loss_epoch',
                                         min_delta=0.00,
-                                        patience=5,
+                                        patience=10,
                                         verbose=False,
-                                        mode='max')
-    trainer = pl.Trainer(callbacks=[early_stop_callback], max_epochs=100, logger=logger)
+                                        mode='min')
 
+    trainer = pl.Trainer(callbacks=[early_stop_callback, CustomCallback()], max_epochs=100, logger=logger)
+    #trainer = pl.Trainer(max_epochs=100, logger=logger)
     trainer.fit(model, data_module)
-    
     torch.save(model.state_dict(), 'model_crop_lightning.pt')
